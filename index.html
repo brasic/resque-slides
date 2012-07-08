@@ -1,0 +1,370 @@
+<!doctype html>  
+<html lang="en">
+	
+	<head>
+		<meta charset="utf-8">
+		
+		<title>Resque</title>
+
+		<meta name="description" content="Resque Presentation">
+		<meta name="author" content="Carl Brasic">
+
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		
+		<link href='css/lato.css' rel='stylesheet' type='text/css'>
+		
+		<link rel="stylesheet" href="css/reset.css">
+		<link rel="stylesheet" href="css/main.css">
+		<link rel="stylesheet" href="css/print.css" type="text/css" media="print">
+
+		<link rel="stylesheet" href="lib/sunburst.css">
+	</head>
+	
+	<body>
+		
+		<div class="reveal">
+
+			<!-- Used to fade in a background when a specific slide state is reached -->
+			<div class="state-background"></div>
+			
+      <!-- Any section element inside of this container is displayed as a slide 
+      (1) high-level "here's why Resque could be a useful solution to the following problems"
+
+      Rails Queueing systems (Resque is one type) are meant to overcome limitations inherent 
+      in the CGI-based model that most webapps use (e.g. processing happens on demand only when a user GETs a resource)
+
+      examples of places where CGI-model is annoying and can make pages render slowly:
+        - dependencies on external resources with unpredictable latency/availibility (e.g. 3rd party APIs)
+        - computationally expensive tasks that take more than a second or so to complete
+
+      examples of places where CGI-model makes things impossible
+        - periodic tasks that happen independent of user pageviews (e.g. cache warming, automated batch jobs)
+        - dynamically scheduled events (e.g. Email every user with one-week followup
+
+      (2) "here's the simplest useful thing you should use Resque for"
+        - background tasks like emailing
+
+      (3) "here's a few interesting but non-obvious points (features or gotchas) about Resque that I wish 
+        someone had pointed out to me when I started as it would have saved me lots of time and effort". thanks again for volunteering :)
+-->
+			<div class="slides">
+				<section>
+          <h1><br/><br/>Using Resque</h1>
+					<script>
+						// Delicously hacky. Look away.
+						if( navigator.userAgent.match( /(iPhone|iPad|iPod|Android)/i ) ) document.write( '<p style="color: rgba(0,0,0,0.3); text-shadow: none;">('+'Tap to navigate'+')</p>' );
+					</script>
+				</section>
+				
+				<section>
+          <h2><br/>Summary</h2><br/>
+          <p>Background Jobs</p>
+          <p class="fragment">Delayed Processing</p>
+          <p class="fragment">Executed outside HTTP process</p>
+				</section>
+				
+				<section>
+					<section>
+            <h2>Concepts</h2>
+              <p style='text-align:left'>In any background work system,</p>
+              <ul>
+                <li class="fragment">A <i>Job</i> is a unit of requested  work.</li>
+                <li class="fragment">A <i>Worker</i> is a daemon that executes jobs.</li>
+                <li class="fragment">A <i>Queue</i> is a FIFO list of jobs.</li>
+                <!--<li class="fragment">Jobs are added to the queue on demand.</li>
+                <li class="fragment">Each worker knows how to do a certain number of jobs.</li>
+                <li class="fragment">Workers watch the queue for available jobs to run.</li> -->
+              </ul>
+					</section>
+					<section>
+            <h2>Implementation</h2>
+              <p style='text-align:left'>In Resque,</p>
+              <ul>
+                <li>Jobs are described as Ruby classes (<code>app/workers</code>).</li>
+                <li>Queues live on a <a href='http://redis.io/'>Redis</a> instance.</li>
+                <!--<li>Jobs are created by the JSON strings like <code>{"class":"SomeWorker","args":[1]}</code></li>-->
+              </ul>
+          </section>
+        </section>
+          
+        <section id="examples">
+          <section id="worker-anatomy">
+            <h3>Example Job Description</h3>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable># app/workers/no_op.rb
+# A job for a worker that does nothing.
+class NoOp
+  @queue = :jobs
+
+  def self.perform(args)
+  end
+
+end</code></pre><br/><h3>Creating a job</h3>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable>Resque.enqueue(NoOp)</code></pre>
+          </section>
+          <section id="worker-anatomy2">
+            <h3>Real Example</h3>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable># Search for users whose trial has expired.
+# Notify them and mark their account as unpaid.
+class ExpireTrialAccounts
+  @queue = :bulk_email
+
+  def self.perform
+    User.trial_exipred.each do |expired_user|
+      expired_user.deactivate_account!
+      Mailer.expiration_notice(expired_user).deliver!
+    end
+  end
+
+end</code></pre>
+          </section>
+        </section>
+
+        <section>
+          <section>
+            <h1><br/><br/>Uses</h1>
+          </section>
+					<section>
+          <h2>Mainly Useful for</h2>
+          <ul>
+            <li class="fragment">Scheduled and periodic tasks</p>
+            <li class="fragment">Executing code async</li>
+            <li class="fragment">Batching aggregated events</li>
+            <li class="fragment">Keeping external APIs at arms length</li>
+          </ul>
+          </section>
+          <section>
+            <ul> 
+              <li>
+                Reminders
+                <br/>
+                <q class="fragment" style='font-size:x-large'>It's been a week since you were last active</q>
+              </li>
+              <li class="fragment">Simple parallelization</li>
+              <li class="fragment">Periodic Batch jobs</li>
+              <li class="fragment">Shell out to subprocess
+              <div class="fragment">(e.g. thumbnails, zipping, transcoding)</div></li>
+              <li class="fragment">Cache Warming</li>
+              <li class="fragment">Isolating external services!</li>
+            </ul> 
+          </section>
+          <section id='refactoring-example'>
+            <h2>Example</h2>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false">class Comment < ActiveRecord::Base
+  belongs_to :thread
+  after_save :notify_subscribers
+  after_save :update_social</code></pre>
+
+            <pre style='font-size:x-large'><code id='notify-subscribers' class='ruby' contenteditable spellcheck="false">  # Send a notification to everyone watching this thread.
+  def notify_subscribers
+    thread.watchers.each do |recipient|
+      Mailer.new_comment(self,recipient).deliver!
+    end
+  end</code></pre>
+
+            <pre style='font-size:x-large'><code id='update-social' class='ruby' contenteditable spellcheck="false">  # Post the comment to any connected social networks.
+  def update_social
+    FacebookClient.comment_story self
+    TwitterClient.comment_tweet self
+    # etc...
+  end
+end</code></pre>
+          <div class="fragment" id="what-if-watchers" data-highlight="notify-subscribers">What if there are 10K watchers?</div>
+          <div class="fragment" id="what-if-facebook" data-highlight="update-social">What if Facebook's API is really slow today?</div>
+
+          </section>
+          <section>
+            <h2>Push work to backround</h2>
+            <pre id='dothisinsteadcode' style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false"># app/models/comment.rb
+class Comment < ActiveRecord::Base
+  belongs_to :thread
+  after_save :notify_subscribers
+  after_save :update_social
+
+  # Send a notification to everyone watching this thread.
+  def notify_subscribers
+    Resque.enqueue(ThreadNotifier, self.id)
+  end
+
+  # Post the comment to any connected social networks.
+  def update_social
+    Resque.enqueue(SocialPoster, self.id)
+  end
+
+end</code></pre>
+          <div class="fragment"><code style='background:black'>#enqueue</code> returns instantly.</div>
+        
+          </section>
+          <section>
+            <h2>Simple Worker</h2>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false"># app/workers/thread_notifier.rb
+class ThreadNotifier
+
+  # Notify thread subscribers about a new comment.
+  def self.perform(id)
+    comment = Comment.get(id)
+    comment.thread.subscribers.each do |recipient|
+      Mailer.new_comment(comment,recipient).deliver!
+    end
+  end
+
+end</code></pre>
+          <div class="fragment">
+            <p>The same (possibly slow) code.</p>
+            <p>Except the user doesn't wait for it.</p>
+          </div>
+
+          </section>
+          <section>
+            <h2>Fancy Workers</h2>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false"># app/workers/social_poster.rb
+class SocialPoster
+  def self.perform(id)
+    Resqueue.enqueue(FacebookPoster,id)
+    Resqueue.enqueue(TwitterPoster,id)
+    # etc...
+  end
+end</code></pre>
+            <pre class="fragment" style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false"># app/workers/facebook_poster.rb
+class FacebookPoster
+  def self.perform(id)
+    FacebookClient.comment_story(Comment.get(id))
+  end
+end</code></pre>
+          <div class="fragment">External API calls fan out and execute in parallel.</div>
+        
+          </section>
+        </section>
+
+        <section id='unique-benefits'>
+          <section>
+            <h1><br/><br/>Unique Benefits</h1>
+          </section>
+          <section>
+            <h2>Language/Code Agnostic</h2>
+            <ul>
+              <li>Workers don't have to use Rails or even Ruby</li>
+              <li class="fragment">Clean separation of responsibility
+                <br/>
+                <p class="fragment">Can swap out worker implementations</p>
+              </li>
+            </ul>
+          </section>
+          <section>
+            <h2>Scalable</h2>
+            <ul>
+              <li>Workers can run outside web tier</li>
+              <li class="fragment">Fine-grained priority-tuning</li>
+            </ul>
+          </section>
+          <section>
+            <h2>Flexible</h2>
+            <ul>
+              <li>Workers can be called synchronously from the controller</li>
+              <li class="fragment">Supports gradual migration</li>
+              <li class="fragment">Plugins support running code in background worker-free</li>
+            </ul>
+          </section>
+          </section>
+
+        <section>
+          <section>
+            <h1>Misc</h1>
+            <ul>
+              <li>resque-web</li>
+              <li>starting/stopping workers</li>
+            </ul>
+          </section>
+				</section>
+
+        <section>
+          <section>
+            <h1><br/><br/>Ecosystem</h1>
+          </section>
+				</section>
+
+			</div>
+
+			<!-- The navigational controls UI -->
+			<aside class="controls">
+				<a class="left" href="#">&#x25C4;</a>
+				<a class="right" href="#">&#x25BA;</a>
+				<a class="up" href="#">&#x25B2;</a>
+				<a class="down" href="#">&#x25BC;</a>
+			</aside>
+
+			<!-- Displays presentation progress, max value changes via JS to reflect # of slides -->
+			<div class="progress"><span></span></div>
+			
+		</div>
+
+    <script src="js/jquery.js"></script>
+		<script src="js/bindWithDelay.js"></script>
+
+		<!-- Optional libraries for code syntax highlighting and classList support in IE9 -->
+		<script src="lib/highlight.js"></script>
+		<script src="lib/classList.js"></script>
+		
+		<script src="js/reveal.js"></script>
+		
+		<script>
+			// Parse the query string into a key/value object
+			var query = {};
+			location.search.replace( /[A-Z0-9]+?=(\w*)/gi, function(a) {
+				query[ a.split( '=' ).shift() ] = a.split( '=' ).pop();
+			} );
+
+			// Fires when a slide with data-state=customevent is activated
+			Reveal.addEventListener( 'customevent', function() {
+				alert( '"customevent" has fired' );
+      } );
+
+      Reveal.addEventListener( 'fragmentshown', function( event ) {
+          window.ev=event // event.fragment = the fragment DOM element
+          var fragment = $(event.fragment);
+          var highlightDivId = fragment.data().highlight;
+          if (highlightDivId != undefined){
+            $('code').removeClass('highlight');
+            console.log(highlightDivId);
+            hlDiv = $('#'+highlightDivId)
+            hlDiv.addClass('highlight');
+          }
+      } );
+
+			// Fires each time a new slide is activated
+      Reveal.addEventListener( 'slidechanged', function( event ) {
+        a=$(':visible').removeClass('highlight')
+				// event.previousSlide, event.currentSlide, event.indexh, event.indexv
+			} );
+
+			Reveal.initialize({
+				// Display controls in the bottom right corner
+				controls: true,
+
+				// Display a presentation progress bar
+				progress: true,
+
+				// If true; each slide will be pushed to the browser history
+				history: true,
+
+				// Loops the presentation, defaults to false
+				loop: false,
+
+				// Flags if mouse wheel navigation should be enabled
+				mouseWheel: true,
+
+				// Apply a 3D roll to links on hover
+				rollingLinks: true,
+
+				// UI style
+				theme: query.theme || 'default', // default/neon
+
+				// Transition style
+				transition: query.transition || 'default' // default/cube/page/concave/linear(2d)
+			});
+
+			hljs.initHighlightingOnLoad();
+		</script>
+
+	</body>
+</html>
