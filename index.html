@@ -58,10 +58,18 @@
 				</section>
 				
 				<section>
-          <h2><br/>Summary</h2><br/>
-          <p>Background Jobs</p>
-          <p class="fragment">Delayed Processing</p>
-          <p class="fragment">Executed outside HTTP process</p>
+          <section>
+            <h2><br/>What is Resque?</h2><br/>
+            <p class="fragment">Background job tool</p>
+            <!--<p class="fragment">Delayed Processing</p>
+            <p class="fragment">Executed outside HTTP process</p> -->
+          </section>
+          <section>
+            <h2><br/>Why use it?</h2><br/>
+            <p class="fragment">Rails limitations</p>
+            <p class="fragment">Speed</p>
+            <p class="fragment"><i>(later)</i> Fancy tricks</p>
+          </section>
 				</section>
 				
 				<section>
@@ -83,7 +91,7 @@
               <ul>
                 <li>Jobs are described as Ruby classes (<code>app/workers</code>).</li>
                 <li>Queues live on a <a href='http://redis.io/'>Redis</a> instance.</li>
-                <!--<li>Jobs are created by the JSON strings like <code>{"class":"SomeWorker","args":[1]}</code></li>-->
+                <li>A resque job:<br/><code>{"class":"SomeJobType","args":[1]}</code></li>
               </ul>
           </section>
         </section>
@@ -121,35 +129,8 @@ end</code></pre>
         </section>
 
         <section>
-          <section>
-            <h1><br/><br/>Uses</h1>
-          </section>
-					<section>
-          <h2>Mainly Useful for</h2>
-          <ul>
-            <li class="fragment">Scheduled and periodic tasks</p>
-            <li class="fragment">Executing code async</li>
-            <li class="fragment">Batching aggregated events</li>
-            <li class="fragment">Keeping external APIs at arms length</li>
-          </ul>
-          </section>
-          <section>
-            <ul> 
-              <li>
-                Reminders
-                <br/>
-                <q class="fragment" style='font-size:x-large'>It's been a week since you were last active</q>
-              </li>
-              <li class="fragment">Simple parallelization</li>
-              <li class="fragment">Periodic Batch jobs</li>
-              <li class="fragment">Shell out to subprocess
-              <div class="fragment">(e.g. thumbnails, zipping, transcoding)</div></li>
-              <li class="fragment">Cache Warming</li>
-              <li class="fragment">Isolating external services!</li>
-            </ul> 
-          </section>
           <section id='refactoring-example'>
-            <h2>Example</h2>
+            <h2>Fixing Slow Code</h2>
             <pre style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false">class Comment < ActiveRecord::Base
   belongs_to :thread
   after_save :notify_subscribers
@@ -195,6 +176,7 @@ end</code></pre>
           <div class="fragment"><code style='background:black'>#enqueue</code> returns instantly.</div>
         
           </section>
+          <!--
           <section>
             <h2>Simple Worker</h2>
             <pre style='font-size:x-large'><code class='ruby' contenteditable spellcheck="false"># app/workers/thread_notifier.rb
@@ -233,59 +215,114 @@ class FacebookPoster
 end</code></pre>
           <div class="fragment">External API calls fan out and execute in parallel.</div>
         
-          </section>
+          </section> -->
         </section>
 
         <section id='unique-benefits'>
           <section>
-            <h1><br/><br/>Unique Benefits</h1>
+            <h1><br/><br/>Advantages</h1>
           </section>
           <section>
             <h2>Language/Code Agnostic</h2>
             <ul>
               <li>Workers don't have to use Rails or even Ruby</li>
-              <li class="fragment">Clean separation of responsibility
-                <br/>
-                <p class="fragment">Can swap out worker implementations</p>
-              </li>
+              <li class="fragment">Implementations in all major languages</li>
             </ul>
           </section>
           <section>
             <h2>Scalable</h2>
             <ul>
-              <li>Workers can run outside web tier</li>
-              <li class="fragment">Fine-grained priority-tuning</li>
+              <li>Workers can run outside web tier and scale independently</li>
+              <li class="fragment">Tunable priorities/roles</li>
             </ul>
           </section>
           <section>
-            <h2>Flexible</h2>
+            <h2>Friendly</h2>
             <ul>
-              <li>Workers can be called synchronously from the controller</li>
-              <li class="fragment">Supports gradual migration</li>
-              <li class="fragment">Plugins support running code in background worker-free</li>
+              <li class="fragment">Supports gradual migration (<i>perform_later</i>)</li>
+              <li class="fragment">Workers can be called synchronously from controller/console</li>
             </ul>
           </section>
-          </section>
+        </section>
 
         <section>
           <section>
-            <h1>Misc</h1>
-            <ul>
-              <li>resque-web</li>
-              <li>starting/stopping workers</li>
-            </ul>
+            <h1><br/><br/>Plugins</h1>
+          </section>
+          <section>
+            <h2>resque-scheduler</h2>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable>Resque.enqueue_in(5.days, 
+                  SendFollowUpEmail, 
+                  :user_id => current_user.id)</code></pre>
+            <img class="fragment" src="assets/scheduler.jpg"</img>
+          </section>
+          <section>
+          <ul>
+            <li>resque-mailer</li>
+            <li>resque-retry</li>
+            <li>resque-loner</li>
+            <li>perform_later</li>
+          </ul><br/><br/><br/>
+          <p><a style='font-size:x-large' href='https://github.com/defunkt/resque/wiki/plugins'>https://github.com/defunkt/resque/wiki/plugins</a></p>
           </section>
 				</section>
 
         <section>
           <section>
-            <h1><br/><br/>Ecosystem</h1>
+            <h1><br/><br/>Administration</h1>
           </section>
+          <section>
+            <h3>redis</h3>
+            <p>Really simple to manually admin</p>
+            <p>or use heroku via <a href="http://redistogo.com/">redisToGo</a>:</p><br/>
+            <pre style='font-size:x-large'><code class='ruby' contenteditable>$ heroku addons:add redistogo:nano
+
+# In your job definition
+extend HerokuAutoScaler::AutoScaling</code></pre>
+            <a style='font-size:large;align:left' href='http://blog.leshill.org/blog/2011/04/03/using-resque-and-resque-scheduler-on-heroku.html'>http://blog.leshill.org/blog/2011/04/03/using-resque-and-resque-scheduler-on-heroku.html</a>
+            </section>
+            <section>
+              <h3>resque-web</h3>
+              <img src="assets/resque-web.png"</img>
+            </section>
+            <section>
+            <ul>
+              <li>rake tasks</li>
+              <li>monitoring</li>
+              <li>deployment</li>
+              <li>graceful degredation</li>
+            </ul>
+            </section>
 				</section>
+
         <section>
           <section>
-          <h2>Thanks</h2>
-          <p>View at <a href="http://brasic.github.com/resque-slides">http://brasic.github.com/resque-slides</a>
+            <h2>Ideas</h2>
+            <ul> 
+              <li>
+                Reminders
+                <br/>
+                <q class="fragment" style='font-size:x-large'>It's been a week since you were last active</q>
+              </li>
+              <li class="fragment">Shell out to subprocess
+                <div class="fragment">(e.g. thumbnails, zipping, conversion)</div></li>
+              <li class="fragment">Cache Warming</li>
+              <li class="fragment">Simple parallelization</li>
+            </ul> 
+            </section>
+
+          <section>
+          <h2>Techniques</h2>
+          <ul>
+            <li class="fragment">Keep external APIs at arms length</li>
+            <li class="fragment">Batching aggregated events</li>
+          </ul>
+          </section>
+
+        <section>
+          <section>
+          <h2>Thanks</h2><br/><br/>github.com/brasic<br/><br/>
+          <a style='font-size:x-large' href="http://brasic.github.com/resque-slides">http://brasic.github.com/resque-slides</a>
 
           </section>
 				</section>
